@@ -1,0 +1,55 @@
+import scapy.all as scapy
+from test_utils import *
+from scapy.all import hexdump, Ether, IP, UDP, Raw
+from scapy.contrib.nsh import NSH
+
+def gen_packet(proto, src_ip, dst_ip):
+  eth = scapy.Ether(src='02:1e:67:9f:4d:ae', dst='06:16:3e:1b:72:32', type=0x894F)
+  nsh = NSH(NSP=0, NSI=0)
+  ip = scapy.IP(src=src_ip, dst=dst_ip)
+  tcp = proto(sport=10001, dport=10002)
+  payload = 'helloworld'
+  pkt = eth/nsh/ip/tcp/payload
+  return bytes(pkt)
+
+packets = [gen_packet(scapy.UDP, '172.16.100.1', '10.0.0.1'),
+           gen_packet(scapy.UDP, '172.12.55.99', '12.34.56.78'),
+           gen_packet(scapy.UDP, '172.12.55.99', '10.0.0.1'),
+           gen_packet(scapy.UDP, '172.16.100.1', '12.34.56.78'),
+           gen_packet(scapy.TCP, '172.12.55.99', '12.34.56.78'),
+           gen_packet(scapy.UDP, '192.168.1.123', '12.34.56.78'),
+          ]
+
+nsh0::NSHdecap(new_spi='100', new_si='1')
+
+class BessEncryptTest(BessModuleTestCase):
+  def test_en_simple(self):
+    eth = scapy.Ether(src='de:ad:be:ef:12:34', dst='12:34:de:ad:be:ef', type=0x894F)
+    nsh2 = NSH(NSP=25, NSI=3, NextProto=1)
+    ip = scapy.IP(src="1.2.3.4", dst="2.3.4.5",ttl=98)
+    udp = scapy.UDP(sport=10001,dport=10002)
+    payload = 'helloworld'
+    pkt_in = eth/nsh2/ip/udp/payload
+#    hexdump(pkt_in)
+    pkt_in.show()
+    nsh1::NSHdecap(new_spi='50', new_si='4')
+    nsh3::NSHencap(new_spi='100', new_si='3')
+    nsh4::NSHdecap(new_spi='50', new_si='2')
+    nsh1->nsh3
+
+    pkt_out = self.run_pipeline(nsh1, nsh3, 0, [pkt_in], [0])
+#    pkt_out = self.run_module(nsh1, 0, [pkt_in], [0])
+    print("//////")
+    pkt_out[0][0].show()
+    print("//////")
+#    pkt_out2 = self.run_module(nsh3, 0, [pkt_out],[0])
+#    hexdump(pkt_out2)
+
+
+Source()->Rewrite(templates=packets) -> nsh0 -> ACL(rules=[{'src_ip': '172.12.0.0/16', 'drop': False}]) -> Sink()
+
+suite = unittest.TestLoader().loadTestsFromTestCase(BessEncryptTest)
+results = unittest.TextTestRunner(verbosity=2).run(suite)
+
+if results.failures or results.errors:
+  sys.exit(1)

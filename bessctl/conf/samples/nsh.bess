@@ -1,0 +1,30 @@
+import scapy.all as scapy
+from scapy.all import Ether, IP, TCP, UDP, Raw
+from scapy.contrib.nsh import NSH
+
+def gen_pkt(src_ip, dst_ip):
+  eth = Ether(src='02:1e:67:9f:4d:ae', dst='06:16:3e:1b:72:32', type=0x894F)
+  nsh = NSH(NSP=0, NSI=0,NextProto=1)
+  ip = IP(src = src_ip, dst = dst_ip)
+  tcp = TCP(sport=10001, dport=10002)
+  payload = 'helloworld'
+  pkt = eth/nsh/ip/tcp/payload
+  return bytes(pkt)
+
+packets = [gen_pkt('172.16.100.1', '10.0.0.1'),
+           gen_pkt('172.12.55.99', '12.34.56.78'),
+           gen_pkt('172.12.55.99', '10.0.0.1'),
+           gen_pkt('172.16.100.1', '12.34.56.78'),
+           gen_pkt('172.12.55.99', '12.34.56.78'),
+           gen_pkt('192.168.1.123', '12.34.56.78')
+          ]
+
+
+nsh0::NSHParse()
+nsh1::NSHParse()
+#nsh0::NSHParse(rules=[{'old_spi': byte0,'old_si': byte0,'new_spi': byte0, 'new_si': byte0, 'ogate': 0}])
+acl0::ACL(rules=[{'src_ip': '172.12.0.0/16', 'drop': False}])
+#nsh1::NSHParse(rules=[{'old_spi': byte0,'old_si': byte0,'new_spi': byte0, 'new_si': byte0, 'ogate': 0}])
+acl1::ACL(rules=[{'src_ip': '172.12.0.0/16', 'drop': False}])
+
+Source() -> Rewrite(templates=packets) -> nsh0 -> acl0 -> nsh1 -> acl1 -> Sink()

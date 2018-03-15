@@ -1,3 +1,4 @@
+# Copyright (c) 2014-2016, The Regents of the University of California.
 # Copyright (c) 2016-2017, Nefeli Networks, Inc.
 # All rights reserved.
 #
@@ -28,35 +29,49 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import scapy.all as scapy
+import socket
 from scapy.contrib.nsh import NSH
 
+def aton(ip):
+    return socket.inet_aton(ip)
+
 # Craft a packet with the specified IP addresses
-def gen_packet(proto, src_ip, dst_ip):
+def gen_packet(proto, src_ip, dst_ip, spi, si):
     eth = scapy.Ether(src='02:1e:67:9f:4d:ae', dst='06:16:3e:1b:72:32', type=0x894F)
-    nsh = NSH(NSP=0, NSI=0)
+    nsh = NSH(NSP=spi, NSI=si)
     ip = scapy.IP(src=src_ip, dst=dst_ip)
     udp = proto(sport=10001, dport=10002)
     payload = 'helloworld'
     pkt = eth/nsh/ip/udp/payload
     return bytes(pkt)
 
-packets = [gen_packet(scapy.UDP, '172.16.100.1', '10.0.0.1'),
-           gen_packet(scapy.UDP, '172.12.55.99', '12.34.56.78'),
-           gen_packet(scapy.UDP, '172.12.55.99', '10.0.0.1'),
-           gen_packet(scapy.UDP, '172.16.100.1', '12.34.56.78'),
-           gen_packet(scapy.TCP, '172.12.55.99', '12.34.56.78'),
-           gen_packet(scapy.UDP, '192.168.1.123', '12.34.56.78'),
+packets = [gen_packet(scapy.UDP, '172.16.100.1', '10.0.0.1', 100, 1),
+           gen_packet(scapy.UDP, '172.12.55.99', '12.34.56.78', 100, 2),
+           gen_packet(scapy.UDP, '172.12.55.99', '10.0.0.1', 50, 1),
+           gen_packet(scapy.UDP, '172.16.100.1', '12.34.56.78', 50, 2),
+           gen_packet(scapy.TCP, '172.12.55.99', '12.34.56.78', 100, 1),
+           gen_packet(scapy.UDP, '192.168.1.123', '12.34.56.78', 50, 1),
           ]
 
-fw::ACL(rules=[{'src_ip': '172.12.0.0/16', 'drop': False}])
-fw2::ACL(rules=[{'src_ip': '172.12.0.0/16', 'drop': False}])
-nsh0::NSHdecap(new_spi='100', new_si='1')
-nsh1::NSHdecap(new_spi='50', new_si='4')
-nsh2::NSHencap(new_spi='20', new_si='5')
+# L4 protocol and source/destination IP addresses
+
+em::ExactMatch(fields=[{'attr_name':'nsh_spi', 'num_bytes':3},
+                       {'attr_name':'nsh_si', 'num_bytes':1}])
+
+Source() -> Rewrite(templates=packets) -> NSHdecap(new_spi='10', new_si='1') ->em
 
 
-Source() -> Rewrite(templates=packets) -> nsh0 -> nsh2 ->Sink()
-#         -> fw -> NSHencap() ->nsh1 -> fw2 -> NSHencap() ->Sink()
-#         -> SetMetadata(attrs=
-#         [{'name': 'nsh_spi', 'size': 3, 'value_bin': '\x00\x00\x00'},
-#          {'name': 'nsh_si', 'size': 1, 'value_bin': '\x01'}]) -> NSHencap() -> Sink() 
+em:0 -> NSHencap(new_spi='50', new_si='4') -> Sink()
+em:1 -> NSHencap(new_spi='100', new_si='3') -> Sink()
+em:2 -> Sink()
+em:5 -> Sink()   # used as default gate
+
+em.add(fields=[{'value_bin':'\x00\x00\x64'}, {'value_int':1}], gate=1)
+em.add(fields=[{'value_bin':'\x00\x00\x32'}, {'value_int':1}], gate=0)
+em.add(fields=[{'value_bin':'\x00\x00\x32'}, {'value_int':2}], gate=2)
+
+# delete test
+#em.add(fields=[{'value_bin':chr(17)}, {'value_bin':aton('192.168.1.123')}, {'value_bin':aton('12.34.56.78')}], gate=3)
+#em.delete(fields=[{'value_bin':chr(17)}, {'value_bin':aton('192.168.1.123')}, {'value_bin':aton('12.34.56.78')}])
+
+em.set_default_gate(gate=5)

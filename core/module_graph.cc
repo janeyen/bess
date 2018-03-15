@@ -32,6 +32,7 @@
 
 #include <glog/logging.h>
 
+#include "gate_hooks/track.h"
 #include "module.h"
 
 std::map<std::string, Module *> ModuleGraph::all_modules_;
@@ -209,7 +210,7 @@ int ModuleGraph::ConnectModules(Module *module, gate_idx_t ogate_idx,
 
   if (!skip_default_hooks) {
     // Gate tracking is enabled by default
-    module->ogates()[ogate_idx]->AddTrackHook();
+    module->ogates()[ogate_idx]->AddHook(new Track());
   }
 
   return 0;

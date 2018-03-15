@@ -96,7 +96,11 @@ CommandResponse ModuleBuilder::RunCommand(
     const google::protobuf::Any &arg) const {
   for (auto &cmd : cmds_) {
     if (user_cmd == cmd.cmd) {
-      if (cmd.mt_safe != Command::THREAD_SAFE && m->HasRunningWorker()) {
+      bool workers_running = false;
+      for (int wid = 0; wid < Worker::kMaxWorkers; wid++) {
+        workers_running |= m->active_workers_[wid] && is_worker_running(wid);
+      }
+      if (cmd.mt_safe != Command::THREAD_SAFE && workers_running) {
         return CommandFailure(EBUSY,
                               "There is a running worker and command "
                               "'%s' is not MT safe",

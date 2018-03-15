@@ -58,6 +58,33 @@ message BPFCommandClearArg {
 }
 
 /**
+ * The Encryption module takes no argument
+ */
+message EncryptArg{
+  string key = 1;
+}
+
+message NSHParseArg {
+  message Rule {
+    bytes old_spi = 1;
+    bytes old_si = 2;
+    bytes new_spi = 3;
+    bytes new_si = 4;
+    uint32 ogate = 5;
+  }
+  repeated Rule rules = 1; 
+}
+
+message NSHdecapArg{
+  bytes new_spi = 1;
+  bytes new_si = 2;
+}
+
+message NSHencapArg{
+  bytes new_spi=1;
+  bytes new_si =2;
+}
+/**
  * The ExactMatch module has a command `add(...)` that takes two parameters.
  * The ExactMatch initializer specifies what fields in a packet to inspect; add() specifies
  * which values to check for over these fields.

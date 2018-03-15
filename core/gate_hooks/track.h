@@ -39,8 +39,6 @@ class Track final : public bess::GateHook {
  public:
   Track();
 
-  static const GateHookCommands cmds;
-
   CommandResponse Init(const bess::Gate *, const bess::pb::TrackArg &);
 
   uint64_t cnt() const { return cnt_; }
@@ -52,8 +50,6 @@ class Track final : public bess::GateHook {
   void set_track_bytes(bool track) { track_bytes_ = track; }
 
   void ProcessBatch(const bess::PacketBatch *batch);
-
-  CommandResponse CommandReset(const bess::pb::EmptyArg &);
 
   static constexpr uint16_t kPriority = 0;
   static const std::string kName;
